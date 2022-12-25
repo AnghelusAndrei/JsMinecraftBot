@@ -1,0 +1,1 @@
+declare module 'mineflayer/examples/pathfinder/gps.js'
