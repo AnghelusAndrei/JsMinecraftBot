@@ -4,11 +4,7 @@ const { pathfinder, Movements, goals: { GoalNear } } = require('mineflayer-pathf
 const pvp = require('mineflayer-pvp').plugin
 const readline = require('readline')
 const fs = require('fs')
-
-//Instance = require('./instance.js').Instance
-//Listener = require('./listener.js').Listener
-
-Bot = require('./bot.js').Bot
+const { Instance } = require('./instance.js')
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -22,10 +18,8 @@ const bot = mineflayer.createBot(config.bot)
 bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
 
-//const instance = new Instance(bot)
-//const listener = new Listener()
 
-instance = new Bot(bot)
+instance = new Instance(bot)
 
 
 bot.once('spawn', () => { 
@@ -40,6 +34,7 @@ rl.on('line', (message) => {
 })
 
 bot.on('chat', async (username, message) => {
+    //console.log(username + ': ' + message);
     if (username == bot.username) return
     var args = message.split(' ')   
     instance.listen(args)
