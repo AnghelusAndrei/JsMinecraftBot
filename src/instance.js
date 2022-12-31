@@ -1,8 +1,7 @@
 var Vec3 = require('vec3').Vec3;
-const mineflayer = require('mineflayer')
-const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
-const { pathfinder, Movements, goals: { GoalNear, GoalFollow } } = require('mineflayer-pathfinder')
-const pvp = require('mineflayer-pvp').plugin
+const { goals: { GoalNear, GoalFollow } } = require('mineflayer-pathfinder')
+const { DEATH_ENTITY_TYPE_MOB, DEATH_ENTITY_TYPE_PLAYER } = require("mineflayer-death-event");
+
 
 
 //decision tree:
@@ -35,12 +34,29 @@ const pvp = require('mineflayer-pvp').plugin
 9.make tools
 */
 
+//features:
+/*
+1.inventory manager
+2.autoeat
+3.long distance travel (done)
+4.resource collecting
+5.attack entity
+6.crafing + smelting
+7.on death get items back
+*/
+
 
 class Instance {
 
     constructor(bot)
     {
         this.bot = bot;
+
+        this.target = {
+            position : null,
+            acquired : true,
+            username : null
+        }
     }
     view(mineflayerViewer){
         mineflayerViewer(this.bot, { port: 3007, firstPerson: true })
@@ -104,10 +120,9 @@ class Instance {
     }
     async travelNear(parameter, distance, mode)
     {
-        var position
         switch(mode){
             case 'position':
-                position = parameter
+                var position = parameter
 
                 while(this.bot.entity.position.distanceTo(position) > distance){
                     this.progressTo(position, distance)
@@ -115,17 +130,16 @@ class Instance {
                     await new Promise((resolve) => {this.bot.once('goal_reached', resolve);});
                 }
                 break;
-            case 'player':
-                var username = parameter
-                position = await this.requestPosition(username)
+            case 'target':
+                this.target.position = await this.requestPosition(this.target.username)
 
 
-                while(this.bot.entity.position.distanceTo(position) > distance || !this.playerIsNear(username)){
-                    this.progressTo(position, distance)
+                while(this.bot.entity.position.distanceTo(this.target.position) > distance || !this.playerIsNear(this.target.username)){
+                    this.progressTo(this.target.position, distance)
     
                     await new Promise((resolve) => {this.bot.once('goal_reached', resolve);});
 
-                    position = await this.requestPosition(username)
+                    this.target.position = await this.requestPosition(this.target.username)
                 }
                 break;
             default:
@@ -153,13 +167,24 @@ class Instance {
         const goal = new GoalFollow(this.bot.players[username].entity, 2)
         this.bot.pathfinder.setGoal(goal, true)
     }
+
+
+
     async hunt(username){
+        this.target = {
+            position : null,
+            acquired : false,
+            username : username
+        }
+
         await this.travelNear(username, this.bot.pvp.viewDistance, 'player')
 
         this.bot.setControlState('sprint', true);
         this.bot.pvp.attack(this.bot.players[username].entity)
 
-        await new Promise((resolve) => {this.bot.once('stoppedAttacking', resolve);});
+        await new Promise((resolve) => {this.bot.once('stoppedAttacking', ()=>{
+            resolve()
+        });});
 
         this.bot.chat('heheheha')
     }
@@ -179,6 +204,15 @@ class Instance {
             default:
                 break;
         }
+    }
+    async run(){
+        this.bot.on('playerDeath', (data)=>{
+            console.log(data);
+        })
+
+        this.bot.on('physicTick', ()=>{
+
+        })
     }
 }
 

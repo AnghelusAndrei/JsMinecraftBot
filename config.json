@@ -2,7 +2,7 @@
     "bot" : {
         "host": "localhost",
         "username": "B09245",
-        "port": 61086,
+        "port": 53838,
         "version": "1.18"
     }
 }

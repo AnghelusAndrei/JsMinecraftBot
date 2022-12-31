@@ -2,6 +2,7 @@ const mineflayer = require('mineflayer')
 const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
 const { pathfinder, Movements, goals: { GoalNear } } = require('mineflayer-pathfinder')
 const pvp = require('mineflayer-pvp').plugin
+const deathEvent = require('mineflayer-death-event')
 const readline = require('readline')
 const fs = require('fs')
 const { Instance } = require('./instance.js')
@@ -17,9 +18,11 @@ const bot = mineflayer.createBot(config.bot)
 
 bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
+bot.loadPlugin(deathEvent)
 
 
 instance = new Instance(bot)
+instance.run()
 
 
 bot.once('spawn', () => { 
@@ -34,7 +37,6 @@ rl.on('line', (message) => {
 })
 
 bot.on('chat', async (username, message) => {
-    //console.log(username + ': ' + message);
     if (username == bot.username) return
     var args = message.split(' ')   
     instance.listen(args)
