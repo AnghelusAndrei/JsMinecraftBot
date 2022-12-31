@@ -6,6 +6,7 @@ const deathEvent = require('mineflayer-death-event')
 const readline = require('readline')
 const fs = require('fs')
 const { Instance } = require('./instance.js')
+const { DataRequester } = require('./requester.js')
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -20,8 +21,8 @@ bot.loadPlugin(pathfinder)
 bot.loadPlugin(pvp)
 bot.loadPlugin(deathEvent)
 
-
-instance = new Instance(bot)
+requester = new DataRequester(bot)
+instance = new Instance(bot, requester)
 instance.run()
 
 

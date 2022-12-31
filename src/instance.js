@@ -4,59 +4,21 @@ const { DEATH_ENTITY_TYPE_MOB, DEATH_ENTITY_TYPE_PLAYER } = require("mineflayer-
 
 
 
-//decision tree:
-
-//inputs:
-/*
-1.distance to target
-2.hunger
-3.armor
-4.how much dirt
-5.how much food
-6.target dimension
-7.current dimension
-8.iron
-9.cobblestone
-10.wood
-11.tools type
-*/
-
-//decisions:
-/*
-1.approach
-2.get dirt
-3.get food
-4.get wood
-5.get stone
-6.get iron
-7.get diamonds
-8.attack nearby monsters
-9.make tools
-*/
-
-//features:
-/*
-1.inventory manager
-2.autoeat
-3.long distance travel (done)
-4.resource collecting
-5.attack entity
-6.crafing + smelting
-7.on death get items back
-*/
-
 
 class Instance {
 
-    constructor(bot)
+    constructor(bot, requester)
     {
         this.bot = bot;
+        this.requester = requester;
 
         this.target = {
             position : null,
             acquired : true,
             username : null
         }
+
+        this.perturbation = false
     }
     view(mineflayerViewer){
         mineflayerViewer(this.bot, { port: 3007, firstPerson: true })
@@ -67,39 +29,6 @@ class Instance {
     playerIsNear(username)
     {
         return this.bot.players[username].entity != null && this.bot.players[username].entity != undefined;
-    }
-    async requestPosition(username){
-        var targetPosition = null;
-        //this.bot.chat('/execute as ' + username + ' at ' + username + ' run tp @s ~ ~ ~');
-        console.log('waiting for position of ' + username)
-
-        var bot = this.bot;
-        var r; 
-
-        function resolveReadPosition(receivedUsername, receivedMessage){
-            var args = receivedMessage.split(' ') 
-            var command = args[0]
-            args.splice(0,1)
-            if (command == 'Teleported') {
-                if(!(args.length <= 4 || args[0] === bot.username)){
-                    args[2].slice(0, -1);
-                    args[3].slice(0, -1);
-                    args[4].slice(0, -1);
-                    console.log(parseInt(args[2]) + ' ' + parseInt(args[3]) + ' ' + parseInt(args[4]))
-                    targetPosition = new Vec3(parseInt(args[2]), parseInt(args[3]), parseInt(args[4]))
-
-                    r();
-                    bot.removeListener('chat', resolveReadPosition);
-                }
-            }
-        }
-
-        await new Promise((resolve) => {
-            r = resolve;
-            this.bot.on('chat', resolveReadPosition);
-        });
-
-        return targetPosition;
     }
     progressTo(position, distance)
     {
@@ -131,15 +60,15 @@ class Instance {
                 }
                 break;
             case 'target':
-                this.target.position = await this.requestPosition(this.target.username)
 
+                this.target.position = await this.requester.requestPosition(this.target.username)
 
                 while(this.bot.entity.position.distanceTo(this.target.position) > distance || !this.playerIsNear(this.target.username)){
                     this.progressTo(this.target.position, distance)
     
                     await new Promise((resolve) => {this.bot.once('goal_reached', resolve);});
 
-                    this.target.position = await this.requestPosition(this.target.username)
+                    this.target.position = await this.requester.requestPosition(this.target.username)
                 }
                 break;
             default:
@@ -160,7 +89,13 @@ class Instance {
     }
     async travelToPlayer(username)
     {
-        await this.travelNear(username, this.bot.pathfinder.viewDistance, 'player')
+        this.target = {
+            position : null,
+            acquired : false,
+            username : username
+        }
+
+        await this.travelNear(username, this.bot.pathfinder.viewDistance, 'target')
 
         this.bot.pathfinder.setMovements(this.defaultMove)
         this.bot.setControlState('sprint', true);
@@ -174,19 +109,24 @@ class Instance {
         this.target = {
             position : null,
             acquired : false,
-            username : username
+            username : username,
         }
 
-        await this.travelNear(username, this.bot.pvp.viewDistance, 'player')
+        await this.travelNear(username, this.bot.pvp.viewDistance, 'target')
 
         this.bot.setControlState('sprint', true);
         this.bot.pvp.attack(this.bot.players[username].entity)
 
-        await new Promise((resolve) => {this.bot.once('stoppedAttacking', ()=>{
-            resolve()
-        });});
 
-        this.bot.chat('heheheha')
+        await new Promise((resolve) => {
+            this.bot.once('stoppedAttacking', ()=>{
+                if(this.target.acquired == true){
+                    this.bot.chat('heheheha')
+                }else{
+                    this.hunt(username)
+                }
+            });
+        });
     }
 
     async listen(args)
@@ -207,10 +147,12 @@ class Instance {
     }
     async run(){
         this.bot.on('playerDeath', (data)=>{
-            console.log(data);
+            console.log(data)
+
+
         })
 
-        this.bot.on('physicTick', ()=>{
+        this.bot.on('physicsTick', ()=>{
 
         })
     }
