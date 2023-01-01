@@ -7,27 +7,18 @@ class DataRequester{
 
     async requestPosition(username){
         var targetPosition = null;
-        //this.bot.chat('/execute as ' + username + ' at ' + username + ' run tp @s ~ ~ ~');
-        //console.log('waiting for position of ' + username)
+        this.bot.chat('/request_position ' + username)
 
         var bot = this.bot;
         var r; 
 
         function resolveReadPosition(receivedUsername, receivedMessage){
             var args = receivedMessage.split(' ') 
-            var command = args[0]
-            args.splice(0,1)
-            if (command == 'Teleported') {
-                if(!(args.length <= 4 || args[0] === bot.username)){
-                    args[2].slice(0, -1);
-                    args[3].slice(0, -1);
-                    args[4].slice(0, -1);
-                    //console.log(parseInt(args[2]) + ' ' + parseInt(args[3]) + ' ' + parseInt(args[4]))
-                    targetPosition = new Vec3(parseInt(args[2]), parseInt(args[3]), parseInt(args[4]))
+            if(args.length == 3 && receivedUsername == 'requested_position'){
+                targetPosition = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
 
-                    r();
-                    bot.removeListener('chat', resolveReadPosition);
-                }
+                r();
+                bot.removeListener('chat', resolveReadPosition);
             }
         }
 
@@ -40,7 +31,28 @@ class DataRequester{
     }
 
     async requestNameFromUuid(uuid){
+        var targetName = null;
+        this.bot.chat('/request_name ' + uuid)
 
+        var bot = this.bot;
+        var r; 
+
+        function resolveReadName(receivedUsername, receivedMessage){
+            var args = receivedMessage.split(' ') 
+            if(args.length == 1 && receivedUsername == 'requested_name'){
+                targetName = args[0]
+
+                r();
+                bot.removeListener('chat', resolveReadName);
+            }
+        }
+
+        await new Promise((resolve) => {
+            r = resolve;
+            this.bot.on('chat', resolveReadName);
+        });
+
+        return targetName;
     }
 
 }

@@ -15,11 +15,10 @@ const rl = readline.createInterface({
 
 const config = JSON.parse(fs.readFileSync('./../config.json'))
 
-const bot = mineflayer.createBot(config.bot)
-
-bot.loadPlugin(pathfinder)
-bot.loadPlugin(pvp)
-bot.loadPlugin(deathEvent)
+const bot = mineflayer.createBot({
+    ...config.bot,
+    plugins: [pvp, pathfinder, deathEvent],
+});
 
 requester = new DataRequester(bot)
 instance = new Instance(bot, requester)
