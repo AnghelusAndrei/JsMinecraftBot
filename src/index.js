@@ -7,6 +7,8 @@ const readline = require('readline')
 const fs = require('fs')
 const { Instance } = require('./instance.js')
 const { DataRequester } = require('./requester.js')
+const { Utils } = require('./utils');
+const inventoryViewer = require('mineflayer-web-inventory')
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -20,16 +22,12 @@ const bot = mineflayer.createBot({
     plugins: [pvp, pathfinder, deathEvent],
 });
 
+inventoryViewer(bot)
+
 requester = new DataRequester(bot)
 instance = new Instance(bot, requester)
 instance.run()
 
-
-bot.once('spawn', () => { 
-    var defaultMove = defaultMove = new Movements(bot)
-    instance.view(mineflayerViewer)
-    instance.setMovements(defaultMove)
-})
 
 rl.on('line', (message) => {
     var args = message.split(' ')  

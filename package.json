@@ -5,6 +5,8 @@
     "mineflayer-death-event": "^1.0.0",
     "mineflayer-pathfinder": "^2.4.2",
     "mineflayer-pvp": "^1.3.2",
+    "mineflayer-statemachine": "^1.6.5",
+    "mineflayer-web-inventory": "^1.8.3",
     "prismarine-viewer": "^1.23.0",
     "readline": "^1.3.0"
   }

@@ -1,12 +1,17 @@
 var Vec3 = require('vec3').Vec3;
 const mineflayer = require('mineflayer')
 const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
-const { pathfinder, Movements, goals: { GoalNear, GoalFollow } } = require('mineflayer-pathfinder')
+const { pathfinder, Movements, goals: { GoalNear, GoalFollow, GoalNearXZ } } = require('mineflayer-pathfinder')
 const pvp = require('mineflayer-pvp').plugin
 const deathEvent = require('mineflayer-death-event')
 const { DEATH_ENTITY_TYPE_MOB, DEATH_ENTITY_TYPE_PLAYER } = require("mineflayer-death-event");
+const { Utils } = require('./utils');
 
-
+const {
+    StateTransition,
+    BotStateMachine,
+    EntityFilters,
+    NestedStateMachine } = require("mineflayer-statemachine");
 
 
 class Instance {
@@ -15,24 +20,14 @@ class Instance {
     {
         this.bot = bot;
         this.requester = requester;
-        this.perturbation = '';
+        this.perturbation = String("");
+        this.utils = new Utils(this.bot)
 
         this.target = {
             position : null,
             acquired : true,
             username : null
         }
-    }
-    view(mineflayerViewer){
-        mineflayerViewer(this.bot, { port: 3007, firstPerson: true })
-    }
-    setMovements(Movements){
-        this.defaultMove = Movements
-        this.bot.setControlState('sprint', true);
-    }
-    playerIsNear(username)
-    {
-        return this.bot.players[username].entity != null && this.bot.players[username].entity != undefined;
     }
     perturbate(){
         this.bot.pvp.forceStop()
@@ -50,7 +45,7 @@ class Instance {
                 break;
         }
     }
-    progressTo(position, distance)
+    async progressTo(position, distance)
     {
         var directionVector = new Vec3(
             position.x - this.bot.entity.position.x,
@@ -58,14 +53,21 @@ class Instance {
             position.z - this.bot.entity.position.z
         );
         directionVector = directionVector.normalize()
-        directionVector = directionVector.scaled((this.bot.entity.position.distanceTo(position) > distance) ? (distance / 4) : (this.bot.entity.position.distanceTo(position) / 4));
+        directionVector = directionVector.scaled((this.bot.entity.position.distanceTo(position) > distance) ? (distance / 2) : (this.bot.entity.position.distanceTo(position) / 2));
+
+        let x = this.bot.entity.position.x + directionVector.x;
+        let z = this.bot.entity.position.z + directionVector.z;
+        let y = await this.requester.requestHeight(x,z)
+
+        this.bot.pathfinder.stop()
         
         this.bot.pathfinder.setMovements(this.defaultMove)
         this.bot.pathfinder.setGoal(new GoalNear(
-            this.bot.entity.position.x + directionVector.x,
-            this.bot.entity.position.y + directionVector.y,
-            this.bot.entity.position.z + directionVector.z, 
-        1))
+            x,
+            y, 
+            z,
+            16
+        ))
     }
     async PerturbationStructure(method){
         const methodName = Object.keys({method})[0];
@@ -90,7 +92,6 @@ class Instance {
                         console.log(methodName + " rejected catched : " + error)
                         this.perturbate();
                         resolve(false)
-                        return;
                     }else{throw error;}
                 });
 
@@ -105,19 +106,19 @@ class Instance {
                 var position = parameter
 
                 while(this.bot.entity.position.distanceTo(position) > distance){
-                    this.progressTo(position, distance)
+                    await this.progressTo(position, distance)
         
-                    await new Promise((resolve) => {this.bot.once('goal_reached', resolve);});
+                    await new Promise(resolve => this.bot.once('goal_reached', resolve))
                 }
                 break;
             case 'target':
 
                 this.target.position = await this.requester.requestPosition(this.target.username)
 
-                while(this.bot.entity.position.distanceTo(this.target.position) > distance || !this.playerIsNear(this.target.username)){
-                    this.progressTo(this.target.position, distance)
+                while(this.bot.entity.position.distanceTo(this.target.position) > distance || !this.utils.playerIsNear(this.target.username)){
+                    await this.progressTo(this.target.position, distance)
     
-                    await new Promise((resolve) => {this.bot.once('goal_reached', resolve);});
+                    await new Promise(resolve => this.bot.once('goal_reached', resolve))
 
                     this.target.position = await this.requester.requestPosition(this.target.username)
                 }
@@ -136,8 +137,6 @@ class Instance {
             position.y,
             position.z, 
         1))
-
-        await new Promise((resolve) => {this.bot.once('goal_reached', resolve);});
     }
     async travelToPlayer(username)
     {
@@ -175,6 +174,7 @@ class Instance {
                     this.bot.pvp.attack(this.bot.players[username].entity)
                 }else{
                     resolve();
+                    this.bot.removeAllListeners('stoppedAttacking')
                 }
             });
         });
@@ -200,6 +200,11 @@ class Instance {
         }
     }
     async run(){
+        this.bot.once('spawn', () => { 
+            mineflayerViewer(this.bot, { port: 3007, firstPerson: true })
+            this.defaultMove = new Movements(this.bot)
+        })
+
         this.bot.on('playerDeath', async (data)=>{
             let name = await this.requester.requestNameFromUuid(data.victim.id);
             if(name == this.target.username){
