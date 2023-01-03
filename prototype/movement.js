@@ -24,30 +24,45 @@ const getPartialPositionState = (function(){
         this.stateName = 'getPartialPositionState';
         this.targets = targets;
         this.data = data;
+        this.received = false;
+    }
+
+    function onRecieved(state){
+        function eventListener(username, message){
+            var args = message.split(' ') 
+            if(username == 'requested_height'){
+                state.data.position.y = parseInt(args[0]);
+                state.received = true;
+                state.bot.removeListener('chat', eventListener);
+            }
+        }
+
+        state.bot.on('chat', eventListener)
     }
 
     GetPartialPositionState.prototype.onStateEntered = function () {
+        this.received = false;
+
         let directionVector = new Vec3(
             this.data.position.x - this.bot.entity.position.x,
             this.data.position.y - this.bot.entity.position.y,
             this.data.position.z - this.bot.entity.position.z
         );
 
-        console.log(this.bot.entity.position)
-        console.log(this.data.position)
-
         directionVector = directionVector.normalize()
-        directionVector = directionVector.scaled((this.bot.entity.position.distanceTo(this.data.position) > this.data.distance) ? (this.data.distance / 2) : (this.bot.entity.position.distanceTo(this.data.position) / 2));
+        directionVector = directionVector.scaled(this.data.distance);
 
 
         this.data.position.x = this.bot.entity.position.x + directionVector.x;
         this.data.position.z = this.bot.entity.position.z + directionVector.z;
 
+        this.bot.chat('/request_height ' + this.data.position.x + ' ' + this.data.position.z)
 
-        this.data.position.y = null;
-        this.data.position.y = this.data.requester.requestHeight(this.data.position.x,this.data.position.z);
+        onRecieved(this);
     };
-    GetPartialPositionState.prototype.onStateExited = function () {};
+    GetPartialPositionState.prototype.onStateExited = function () {
+        this.bot.removeListener('chat', onRecieved);
+    };
 
     return GetPartialPositionState;
 }());
@@ -60,11 +75,28 @@ const getPlayerPositionState = (function(){
         this.stateName = 'getPlayerPositionState';
         this.targets = targets;
         this.data = data;
+        this.received = false;
+    }
+
+    function onRecieved(state){
+        function eventListener(username, message){
+            var args = message.split(' ') 
+            if(username == 'requested_position'){
+                state.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
+                state.received = true;
+                state.bot.removeListener('chat', eventListener);
+            }
+        }
+
+        state.bot.on('chat', eventListener)
     }
 
     GetPlayerPositionState.prototype.onStateEntered = function () {
-        this.data.position = null;
+        this.received = false;
+
         this.bot.chat('/request_position ' + this.data.username)
+
+        onRecieved(this);
     };
     GetPlayerPositionState.prototype.onStateExited = function () {};
 
@@ -79,11 +111,21 @@ const progressToState = (function(){
         this.active = false;
         this.stateName = 'progressToState';
         this.targets = targets;
-        this.reached = false;
         this.data = data;
+        this.reached = false;
+    }
+
+    function onRecieved(state){
+        function eventListener(){
+            state.reached = true;
+        }
+
+        state.bot.once('goal_reached', eventListener)
     }
 
     ProgressToState.prototype.onStateEntered = function () {
+        this.reached = false;
+
         this.bot.pathfinder.stop()
         
         this.bot.pathfinder.setMovements(this.data.defaultMove)
@@ -94,13 +136,9 @@ const progressToState = (function(){
             16
         ))
 
-        this.bot.once('goal_reached', ()=>{
-            this.reached = true;
-        })
+        onRecieved(this);
     };
-    ProgressToState.prototype.onStateExited = function () {
-        this.bot.removeAllListeners('goal_reached');
-    };
+    ProgressToState.prototype.onStateExited = function () {};
 
     return ProgressToState;
 }());
@@ -129,12 +167,17 @@ const followPlayerState = (function(){
 
 function createApproachPlayerState(bot, targets, data)
 {
+    this.data = data;
+    this.targets = targets;
+    this.bot = bot;
+
+
     const enter = new BehaviorIdle();
     const exit = new BehaviorIdle();
 
-    const getPlayerPosition = new getPlayerPositionState(bot, targets, data);
-    const progressTo = new progressToState(bot, targets, data);
-    const getPartialPosition = new getPartialPositionState(bot, targets, data);
+    const getPlayerPosition = new getPlayerPositionState(this.bot, this.targets, this.data);
+    const progressTo = new progressToState(this.bot, this.targets, this.data);
+    const getPartialPosition = new getPartialPositionState(this.bot, this.targets, this.data);
 
     const transitions = [
 
@@ -142,57 +185,47 @@ function createApproachPlayerState(bot, targets, data)
             parent: enter,
             child: getPlayerPosition,
             shouldTransition: () => true,
+            onTransition: () => {console.log('layer: 1, transition: 0')},
         }),
 
         new StateTransition({
             parent: getPlayerPosition,
             child: getPartialPosition,
-            shouldTransition: () => 
-            {
-                if(getPlayerPosition.data.position == null || getPlayerPosition.data.position instanceof Promise)return false;
-                return (getPlayerPosition.data.position.distanceTo(bot.entity.position) > getPlayerPosition.data.distance || !getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username))
-            }
+            shouldTransition: () => {
+                if(!getPlayerPosition.received)return false;
+                return !getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username);
+            },
+            onTransition: () => {console.log('layer: 1, transition: 1')},
         }),
 
         new StateTransition({
             parent: getPlayerPosition,
             child: exit,
-            shouldTransition: () => 
-            {
-                if(getPlayerPosition.data.position == null || getPlayerPosition.data.position instanceof Promise)return false;
-                return (getPlayerPosition.data.position.distanceTo(bot.entity.position) < getPlayerPosition.data.distance || getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username))
+            shouldTransition: () => {
+                if(!getPlayerPosition.received)return false;
+                return getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username);
             },
+            onTransition: () => {console.log('layer: 1, transition: 2')},
         }),
 
         new StateTransition({
             parent: getPartialPosition,
             child: progressTo,
-            shouldTransition: () => getPlayerPosition.data.position.y != null,
+            shouldTransition: () => getPartialPosition.received,
+            onTransition: () => {console.log('layer: 1, transition: 3')},
         }),
 
         new StateTransition({
             parent: progressTo,
             child: getPlayerPosition,
             shouldTransition: () => progressTo.reached,
+            onTransition: () => {console.log('layer: 1, transition: 4')},
         }),
     ];
 
-    bot.on('chat', (username, message)=>{
-        switch(username){
-            case 'requested_position':
-                var args = message.split(' ') 
-                if(args.length != 3){break;}
-                getPlayerPosition.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
-                getPartialPosition.data.position = getPlayerPosition.data.position;
-                transitions[1].trigger();
-                transitions[2].trigger();
-                break;
-            default:
-                break;
-        }
-    })
+    const ApproachPlayerState = new NestedStateMachine(transitions, enter, exit);
 
-    return new NestedStateMachine(transitions, enter, exit);
+    return ApproachPlayerState;
 }
 
 module.exports = {
