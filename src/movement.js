@@ -2,10 +2,7 @@ var Vec3 = require('vec3').Vec3;
 const mineflayer = require('mineflayer')
 const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
 const { pathfinder, Movements, goals: { GoalNear, GoalFollow, GoalNearXZ } } = require('mineflayer-pathfinder')
-const pvp = require('mineflayer-pvp').plugin
-const deathEvent = require('mineflayer-death-event')
-const { DEATH_ENTITY_TYPE_MOB, DEATH_ENTITY_TYPE_PLAYER } = require("mineflayer-death-event");
-const { Utils } = require('../src/utils');
+const { Utils } = require('./utils');
 
 const {
     StateTransition,
@@ -27,7 +24,7 @@ const getPartialPositionState = (function(){
         this.received = false;
     }
 
-    function onRecieved(state){
+    function onReceived(state){
         function eventListener(username, message){
             var args = message.split(' ') 
             if(username == 'requested_height'){
@@ -41,9 +38,10 @@ const getPartialPositionState = (function(){
     }
 
     GetPartialPositionState.prototype.onStateEntered = function () {
+
         this.received = false;
 
-        let directionVector = new Vec3(
+        var directionVector = new Vec3(
             this.data.position.x - this.bot.entity.position.x,
             this.data.position.y - this.bot.entity.position.y,
             this.data.position.z - this.bot.entity.position.z
@@ -52,17 +50,14 @@ const getPartialPositionState = (function(){
         directionVector = directionVector.normalize()
         directionVector = directionVector.scaled(this.data.distance);
 
-
         this.data.position.x = this.bot.entity.position.x + directionVector.x;
         this.data.position.z = this.bot.entity.position.z + directionVector.z;
 
         this.bot.chat('/request_height ' + this.data.position.x + ' ' + this.data.position.z)
 
-        onRecieved(this);
+        onReceived(this);
     };
-    GetPartialPositionState.prototype.onStateExited = function () {
-        this.bot.removeListener('chat', onRecieved);
-    };
+    GetPartialPositionState.prototype.onStateExited = function () {};
 
     return GetPartialPositionState;
 }());
@@ -78,7 +73,7 @@ const getPlayerPositionState = (function(){
         this.received = false;
     }
 
-    function onRecieved(state){
+    function onReceived(state){
         function eventListener(username, message){
             var args = message.split(' ') 
             if(username == 'requested_position'){
@@ -96,7 +91,7 @@ const getPlayerPositionState = (function(){
 
         this.bot.chat('/request_position ' + this.data.username)
 
-        onRecieved(this);
+        onReceived(this);
     };
     GetPlayerPositionState.prototype.onStateExited = function () {};
 
@@ -115,7 +110,7 @@ const progressToState = (function(){
         this.reached = false;
     }
 
-    function onRecieved(state){
+    function onReceived(state){
         function eventListener(){
             state.reached = true;
         }
@@ -136,7 +131,7 @@ const progressToState = (function(){
             16
         ))
 
-        onRecieved(this);
+        onReceived(this);
     };
     ProgressToState.prototype.onStateExited = function () {};
 
@@ -185,7 +180,7 @@ function createApproachPlayerState(bot, targets, data)
             parent: enter,
             child: getPlayerPosition,
             shouldTransition: () => true,
-            onTransition: () => {console.log('layer: 1, transition: 0')},
+            onTransition: () => {},
         }),
 
         new StateTransition({
@@ -195,7 +190,7 @@ function createApproachPlayerState(bot, targets, data)
                 if(!getPlayerPosition.received)return false;
                 return !getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username);
             },
-            onTransition: () => {console.log('layer: 1, transition: 1')},
+            onTransition: () => {},
         }),
 
         new StateTransition({
@@ -205,21 +200,21 @@ function createApproachPlayerState(bot, targets, data)
                 if(!getPlayerPosition.received)return false;
                 return getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username);
             },
-            onTransition: () => {console.log('layer: 1, transition: 2')},
+            onTransition: () => {},
         }),
 
         new StateTransition({
             parent: getPartialPosition,
             child: progressTo,
             shouldTransition: () => getPartialPosition.received,
-            onTransition: () => {console.log('layer: 1, transition: 3')},
+            onTransition: () => {},
         }),
 
         new StateTransition({
             parent: progressTo,
             child: getPlayerPosition,
-            shouldTransition: () => progressTo.reached,
-            onTransition: () => {console.log('layer: 1, transition: 4')},
+            shouldTransition: () => getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username),
+            onTransition: () => {},
         }),
     ];
 
@@ -228,10 +223,71 @@ function createApproachPlayerState(bot, targets, data)
     return ApproachPlayerState;
 }
 
+function createTravelToPlayerState(bot, targets, data){
+    this.data = data;
+    this.targets = targets;
+    this.bot = bot;
+
+    const enter = new BehaviorIdle();
+
+    const approachState = createApproachPlayerState(this.bot, this.targets, this.data);
+    const followState = new followPlayerState(this.bot, this.targets, this.data);
+    const getPlayerPosition = new getPlayerPositionState(this.bot, this.targets, this.data);
+    
+    const transitions = [
+        new StateTransition({
+            parent: enter,
+            child: getPlayerPosition,
+            shouldTransition: () => true,
+            onTransition: () => {},
+        }),
+    
+        new StateTransition({
+            parent: getPlayerPosition,
+            child: followState,
+            shouldTransition: () => {
+                if(!getPlayerPosition.received)return false;
+                return getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username);
+            },
+            onTransition: () => {},
+        }),
+
+        new StateTransition({
+            parent: getPlayerPosition,
+            child: approachState,
+            shouldTransition: () => {
+                if(!getPlayerPosition.received)return false;
+                return !getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username);
+            },
+            onTransition: () => {},
+        }),
+
+        new StateTransition({
+            parent: approachState,
+            child: getPlayerPosition,
+            shouldTransition: () => approachState.isFinished(),
+            onTransition: () => {},
+        }),
+
+        new StateTransition({
+            parent: followState,
+            child: getPlayerPosition,
+            shouldTransition: () => !followState.data.utils.playerIsNear(followState.data.username),
+            onTransition: () => {},
+        }),
+    ];
+
+    const TravelToPlayerState = new NestedStateMachine(transitions, enter);
+    TravelToPlayerState.stateName = 'TravelToPlayerState';
+
+    return TravelToPlayerState;
+}
+
 module.exports = {
     getPartialPositionState : getPartialPositionState,
     followPlayerState : followPlayerState,
     getPlayerPositionState : getPlayerPositionState,
     progressToState : progressToState,
-    createApproachPlayerState : createApproachPlayerState
+    createApproachPlayerState : createApproachPlayerState,
+    createTravelToPlayerState : createTravelToPlayerState
 }

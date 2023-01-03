@@ -5,15 +5,17 @@ const pvp = require('mineflayer-pvp').plugin
 const deathEvent = require('mineflayer-death-event')
 const readline = require('readline')
 const fs = require('fs')
-const { Instance } = require('./instance.js')
-const { DataRequester } = require('./requester.js')
 const { Utils } = require('./utils');
 const inventoryViewer = require('mineflayer-web-inventory')
+var Vec3 = require('vec3').Vec3;
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 })
+
+const { Instance } = require('./instance.js');
+
 
 const config = JSON.parse(fs.readFileSync('./../config.json'))
 
@@ -22,22 +24,27 @@ const bot = mineflayer.createBot({
     plugins: [pvp, pathfinder, deathEvent],
 });
 
-inventoryViewer(bot)
+const instance = new Instance(bot);
 
-requester = new DataRequester(bot)
-instance = new Instance(bot, requester)
-instance.run()
+
+bot.once('spawn', ()=>{
+    inventoryViewer(bot)
+    mineflayerViewer(bot, { port: 3007, firstPerson: true })
+    instance.run();
+})
+
+
 
 
 rl.on('line', (message) => {
-    var args = message.split(' ')  
-    instance.listen(args)
+    args = message.split(' ');
+    instance.listen(args);
 })
 
 bot.on('chat', async (username, message) => {
-    if (username == bot.username) return
-    var args = message.split(' ')   
-    instance.listen(args)
+    if (username == bot.username) return;
+    args = message.split(' ');
+    instance.listen(args);
 })
 
 bot.on('kicked', console.log)
