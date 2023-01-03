@@ -55,28 +55,60 @@ bot.once('spawn', ()=>{
     let data = {
         utils : utils,
         requester : requester,
-        username : null,
+        username : 'M09245',
         defaultMove : new Movements(bot),
         position : null,
         distance : bot.pathfinder.viewDistance
     }
     
     const idleState = new BehaviorIdle();
-    const approachState = createApproachPlayerState(bot, targets, data)
+    const approachState = createApproachPlayerState(bot, targets, data);
+    const followState = new followPlayerState(bot, targets, data);
+    const getPlayerPosition = new getPlayerPositionState(bot, targets, data);
     
     const transitions = [
         new StateTransition({
             parent: idleState,
-            child: approachState,
+            child: getPlayerPosition,
             shouldTransition: () => true,
         }),
     
         new StateTransition({
-            parent: approachState,
-            child: idleState,
-            shouldTransition: () => false,
+            parent: getPlayerPosition,
+            child: followState,
+            shouldTransition: () => 
+            {
+                if(getPlayerPosition.data.position == null || getPlayerPosition.data.position instanceof Promise)return false;
+                return (getPlayerPosition.data.position.distanceTo(bot.entity.position) < getPlayerPosition.data.distance || getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username))
+            },
+        }),
+
+        new StateTransition({
+            parent: getPlayerPosition,
+            child: approachState,
+            shouldTransition: () => 
+            {
+                if(getPlayerPosition.data.position == null || getPlayerPosition.data.position instanceof Promise)return false;
+                return (getPlayerPosition.data.position.distanceTo(bot.entity.position) > getPlayerPosition.data.distance || !getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username))
+            }
         })
     ];
+
+    bot.on('chat', (username, message)=>{
+        switch(username){
+            case 'requested_position':
+                var args = message.split(' ') 
+                if(args.length != 3){break;}
+                getPlayerPosition.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
+                followState.data.position = getPlayerPosition.data.position;
+                approachState.data.position = getPlayerPosition.data.position;
+                transitions[1].trigger();
+                transitions[2].trigger();
+                break;
+            default:
+                break;
+        }
+    })
     
     const rootLayer = new NestedStateMachine(transitions, idleState);
     const stateMachine = new BotStateMachine(bot, rootLayer);

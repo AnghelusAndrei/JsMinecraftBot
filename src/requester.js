@@ -5,29 +5,37 @@ class DataRequester{
         this.bot = bot
     }
 
-    async requestPosition(username){
+    requestPosition(username){
         var targetPosition = null;
         this.bot.chat('/request_position ' + username)
+        console.log('requesting')
 
         var bot = this.bot;
         var r; 
 
         function resolveReadPosition(receivedUsername, receivedMessage){
+            console.log('recieved')
+
             var args = receivedMessage.split(' ') 
             if(args.length == 3 && receivedUsername == 'requested_position'){
                 targetPosition = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
 
-                r();
+                console.log('resolving')
                 bot.removeListener('chat', resolveReadPosition);
+                r();
             }
         }
 
-        await new Promise((resolve) => {
+        const promise = new Promise((resolve) => {
             r = resolve;
             this.bot.on('chat', resolveReadPosition);
         });
 
-        return targetPosition;
+        promise.then(()=>{
+            console.log('done')
+
+            return targetPosition;
+        })
     }
 
     async requestNameFromUuid(uuid){

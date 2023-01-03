@@ -24,14 +24,21 @@ const getPartialPositionState = (function(){
         this.stateName = 'getPartialPositionState';
         this.targets = targets;
         this.data = data;
+    }
 
+    GetPartialPositionState.prototype.onStateEntered = function () {
         let directionVector = new Vec3(
             this.data.position.x - this.bot.entity.position.x,
             this.data.position.y - this.bot.entity.position.y,
             this.data.position.z - this.bot.entity.position.z
         );
+
+        console.log(this.bot.entity.position)
+        console.log(this.data.position)
+
         directionVector = directionVector.normalize()
         directionVector = directionVector.scaled((this.bot.entity.position.distanceTo(this.data.position) > this.data.distance) ? (this.data.distance / 2) : (this.bot.entity.position.distanceTo(this.data.position) / 2));
+
 
         this.data.position.x = this.bot.entity.position.x + directionVector.x;
         this.data.position.z = this.bot.entity.position.z + directionVector.z;
@@ -39,9 +46,7 @@ const getPartialPositionState = (function(){
 
         this.data.position.y = null;
         this.data.position.y = this.data.requester.requestHeight(this.data.position.x,this.data.position.z);
-    }
-
-    GetPartialPositionState.prototype.onStateEntered = function () {};
+    };
     GetPartialPositionState.prototype.onStateExited = function () {};
 
     return GetPartialPositionState;
@@ -55,12 +60,12 @@ const getPlayerPositionState = (function(){
         this.stateName = 'getPlayerPositionState';
         this.targets = targets;
         this.data = data;
-
-        this.data.position = null;
-        this.data.position = this.data.requester.requestPosition(data.username);
     }
 
-    GetPlayerPositionState.prototype.onStateEntered = function () {};
+    GetPlayerPositionState.prototype.onStateEntered = function () {
+        this.data.position = null;
+        this.bot.chat('/request_position ' + this.data.username)
+    };
     GetPlayerPositionState.prototype.onStateExited = function () {};
 
     return GetPlayerPositionState;
@@ -76,11 +81,9 @@ const progressToState = (function(){
         this.targets = targets;
         this.reached = false;
         this.data = data;
+    }
 
-        this.bot.on('goal_reached', ()=>{
-            this.reached = true;
-        })
-
+    ProgressToState.prototype.onStateEntered = function () {
         this.bot.pathfinder.stop()
         
         this.bot.pathfinder.setMovements(this.data.defaultMove)
@@ -90,10 +93,14 @@ const progressToState = (function(){
             this.data.position.z,
             16
         ))
-    }
 
-    ProgressToState.prototype.onStateEntered = function () {};
-    ProgressToState.prototype.onStateExited = function () {};
+        this.bot.once('goal_reached', ()=>{
+            this.reached = true;
+        })
+    };
+    ProgressToState.prototype.onStateExited = function () {
+        this.bot.removeAllListeners('goal_reached');
+    };
 
     return ProgressToState;
 }());
@@ -106,15 +113,15 @@ const followPlayerState = (function(){
         this.stateName = 'followPlayerState';
         this.targets = targets;
         this.data = data;
+    }
 
+    FollowPlayerState.prototype.onStateEntered = function () {
         this.bot.pathfinder.stop()
         
         this.bot.pathfinder.setMovements(this.data.defaultMove)
         const goal = new GoalFollow(this.bot.players[this.data.username].entity, 2)
         this.bot.pathfinder.setGoal(goal, true)
-    }
-
-    FollowPlayerState.prototype.onStateEntered = function () {};
+    };
     FollowPlayerState.prototype.onStateExited = function () {};
 
     return FollowPlayerState;
@@ -166,9 +173,24 @@ function createApproachPlayerState(bot, targets, data)
         new StateTransition({
             parent: progressTo,
             child: getPlayerPosition,
-            shouldTransition: () => progressTo.reached == true,
+            shouldTransition: () => progressTo.reached,
         }),
     ];
+
+    bot.on('chat', (username, message)=>{
+        switch(username){
+            case 'requested_position':
+                var args = message.split(' ') 
+                if(args.length != 3){break;}
+                getPlayerPosition.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
+                getPartialPosition.data.position = getPlayerPosition.data.position;
+                transitions[1].trigger();
+                transitions[2].trigger();
+                break;
+            default:
+                break;
+        }
+    })
 
     return new NestedStateMachine(transitions, enter, exit);
 }
