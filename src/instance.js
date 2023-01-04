@@ -28,7 +28,11 @@ const {
 const {
     attackPlayerState,
     createHuntPlayerState,
-} = require('./hunt.js')
+} = require('./hunt.js');
+
+const {
+    guardPlayerState,
+} = require('./guard.js');
 
 
 class Instance{
@@ -50,8 +54,10 @@ class Instance{
         }
         
         this.idleState = new BehaviorIdle();
-        this.followState = new createTravelToPlayerState(this.bot, this.targets, this.data)
-        this.attackState = new createHuntPlayerState(this.bot, this.targets, this.data)
+        this.followState = createTravelToPlayerState(this.bot, this.targets, this.data)
+        this.attackState = createHuntPlayerState(this.bot, this.targets, this.data)
+        this.guardState = new guardPlayerState(this.bot, this.targets, this.data);
+        
         this.transitions = [
             new StateTransition({
                 parent: this.idleState,
@@ -63,7 +69,7 @@ class Instance{
             new StateTransition({
                 parent: this.followState,
                 child: this.idleState,
-                shouldTransition: () => false,
+                shouldTransition: () => this.followState.isFinished(),
                 onTransition: () => {},
             }),
             
@@ -77,11 +83,24 @@ class Instance{
             new StateTransition({
                 parent: this.attackState,
                 child: this.idleState,
+                shouldTransition: () => this.attackState.isFinished(),
+                onTransition: () => {},
+            }),
+
+            new StateTransition({
+                parent: this.idleState,
+                child: this.guardState,
+                shouldTransition: () => false,
+                onTransition: () => {},
+            }),
+
+            new StateTransition({
+                parent: this.guardState,
+                child: this.idleState,
                 shouldTransition: () => false,
                 onTransition: () => {},
             }),
         ];
-        
         this.rootLayer = new NestedStateMachine(this.transitions, this.idleState);
         this.rootLayer.stateName = 'main';
     }
@@ -89,7 +108,6 @@ class Instance{
     run(){
         this.createRootLayer();
         const stateMachine = new BotStateMachine(this.bot, this.rootLayer);
-    
         const port = 12345;
         const SMServer = new StateMachineWebserver(this.bot, stateMachine, port);
         SMServer.startServer();
@@ -103,19 +121,28 @@ class Instance{
                 this.data.username = args[0];
                 this.data.distance = 40;
 
-                this.attackState = this.data;
+                this.attackState.data = this.data;
                 this.transitions[2].trigger();
                 break;
             case 'follow':
                 this.data.username = args[0];
                 this.data.distance = 40;
 
-                this.followState = this.data;
+                this.followState.data = this.data; 
                 this.transitions[0].trigger();
                 break;
+            case 'guard':
+                this.transitions[4].trigger();
+                break;
             case 'stop':
-                this.transitions[1].trigger();
-                this.transitions[3].trigger();
+                for(let i = 0; i < this.transitions.length; i++){
+                    if(this.transitions[i].childState == this.idleState){
+                        this.transitions[i].trigger();
+                    }
+                }
+                this.bot.pvp.stop();
+                this.bot.pathfinder.stop();
+                this.bot.removeAllListeners('goal_reached');
                 break;
             default:
                 break;

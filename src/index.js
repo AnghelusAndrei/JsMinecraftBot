@@ -19,33 +19,35 @@ const { Instance } = require('./instance.js');
 
 const config = JSON.parse(fs.readFileSync('./../config.json'))
 
-const bot = mineflayer.createBot({
-    ...config.bot,
-    plugins: [pvp, pathfinder, deathEvent],
-});
+function connectBot(config){
+    const bot = mineflayer.createBot({
+        ...config.bot,
+        plugins: [pvp, pathfinder, deathEvent],
+    });
+    
+    const instance = new Instance(bot);
+    
+    
+    bot.once('spawn', ()=>{
+        inventoryViewer(bot)
+        mineflayerViewer(bot, { port: 3007, firstPerson: true })
+        instance.run();
+    })
+    
+    
+    rl.on('line', (message) => {
+        args = message.split(' ');
+        instance.listen(args);
+    })
+    
+    bot.on('chat', async (username, message) => {
+        if (username == bot.username) return;
+        args = message.split(' ');
+        instance.listen(args);
+    })
 
-const instance = new Instance(bot);
+    bot.on('kicked', (reason, loggedIn) => {console.log(reason);connectBot(config)})
+    bot.on('error', (error) => {console.log(error);connectBot(config)})
+}
 
-
-bot.once('spawn', ()=>{
-    inventoryViewer(bot)
-    mineflayerViewer(bot, { port: 3007, firstPerson: true })
-    instance.run();
-})
-
-
-
-
-rl.on('line', (message) => {
-    args = message.split(' ');
-    instance.listen(args);
-})
-
-bot.on('chat', async (username, message) => {
-    if (username == bot.username) return;
-    args = message.split(' ');
-    instance.listen(args);
-})
-
-bot.on('kicked', console.log)
-bot.on('error', console.log)
+connectBot(config)

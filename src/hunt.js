@@ -1,11 +1,3 @@
-var Vec3 = require('vec3').Vec3;
-const mineflayer = require('mineflayer')
-const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
-const { pathfinder, Movements, goals: { GoalNear, GoalFollow, GoalNearXZ } } = require('mineflayer-pathfinder')
-const pvp = require('mineflayer-pvp').plugin
-const deathEvent = require('mineflayer-death-event')
-const { DEATH_ENTITY_TYPE_MOB, DEATH_ENTITY_TYPE_PLAYER } = require("mineflayer-death-event");
-const { Utils } = require('./utils');
 
 
 const {
@@ -34,11 +26,12 @@ const attackPlayerState = (function(){
 
     AttackPlayerState.prototype.onStateEntered = function () {
         this.bot.pathfinder.stop()
-        bot.chat('nigga')
 
         this.bot.pvp.attack(this.bot.players[this.data.username].entity)
     };
-    AttackPlayerState.prototype.onStateExited = function () {};
+    AttackPlayerState.prototype.onStateExited = function () {
+        this.bot.pvp.stop();
+    };
 
     return AttackPlayerState;
 }());
@@ -49,6 +42,7 @@ function createHuntPlayerState(bot, targets, data){
     this.bot = bot;
 
     const enter = new BehaviorIdle();
+    const exit = new BehaviorIdle();
 
     const approachState = createApproachPlayerState(this.bot, this.targets, this.data);
     const attackState = new attackPlayerState(this.bot, this.targets, this.data);
@@ -95,10 +89,69 @@ function createHuntPlayerState(bot, targets, data){
             shouldTransition: () => !attackState.data.utils.playerIsNear(attackState.data.username),
             onTransition: () => {},
         }),
+
+        new StateTransition({
+            parent: approachState,
+            child: exit,
+            shouldTransition: () => false,
+            onTransition: () => {},
+        }),
+
+        new StateTransition({
+            parent: attackState,
+            child: exit,
+            shouldTransition: () => false,
+            onTransition: () => {},
+        }),
+
+        new StateTransition({
+            parent: getPlayerPosition,
+            child: exit,
+            shouldTransition: () => false,
+            onTransition: () => {},
+        }),
     ];
 
-    const HuntPlayerState = new NestedStateMachine(transitions, enter);
+    const HuntPlayerState = new NestedStateMachine(transitions, enter, exit);
     HuntPlayerState.stateName = 'HuntPlayerState';
+
+    var state = this;
+
+    function deathListener(data){
+        if(!HuntPlayerState.active)return;
+
+        let uuid = data.victim.id;
+        var name = null;
+        state.bot.chat('/request_name ' + uuid);
+
+        function onReceived(){
+            function eventListener(username, message){
+                var args = message.split(' ') 
+                if(username == 'requested_name'){
+                    name = args[0]
+
+                    if(name != state.data.username)return;
+
+                    state.bot.removeListener('chat', eventListener);
+
+                    for(let i = 0; i < transitions.length; i++){
+                        if(transitions[i].childState == exit){
+                            transitions[i].trigger();
+                        }
+                    }
+                    state.bot.chat('heheheha');
+                    state.bot.removeListener("chat", eventListener)
+                    state.bot.removeListener("playerDeath", deathListener)
+                }
+            }
+    
+            state.bot.on('chat', eventListener)
+        }
+
+        onReceived(this);
+    }
+    
+    this.bot.on("playerDeath", deathListener);
 
     return HuntPlayerState;
 }

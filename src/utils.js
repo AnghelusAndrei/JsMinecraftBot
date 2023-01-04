@@ -17,6 +17,18 @@ class Utils{
         return this.bot.players[username].entity != null && this.bot.players[username].entity != undefined;
     }
 
+    botIsStuck(){
+        if(this.bot.pathfinder.isMoving()){
+
+        }else if(this.bot.pathfinder.isBuilding()){
+
+        }else if(this.bot.pathfinder.isMining()){
+
+        }
+        
+        return true;
+    }
+
 }
 
 module.exports = {

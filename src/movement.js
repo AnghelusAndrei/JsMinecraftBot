@@ -24,14 +24,9 @@ const getPartialPositionState = (function(){
         this.received = false;
     }
 
-    function onReceived(state){
+    function onReceived(state, method){
         function eventListener(username, message){
-            var args = message.split(' ') 
-            if(username == 'requested_height'){
-                state.data.position.y = parseInt(args[0]);
-                state.received = true;
-                state.bot.removeListener('chat', eventListener);
-            }
+            method(username, message, eventListener);
         }
 
         state.bot.on('chat', eventListener)
@@ -55,7 +50,14 @@ const getPartialPositionState = (function(){
 
         this.bot.chat('/request_height ' + this.data.position.x + ' ' + this.data.position.z)
 
-        onReceived(this);
+        onReceived(this, (username, message, eventListener)=>{
+            var args = message.split(' ') 
+            if(username == 'requested_height'){
+                this.data.position.y = parseInt(args[0]);
+                this.received = true;
+                this.bot.removeListener('chat', eventListener);
+            }
+        });
     };
     GetPartialPositionState.prototype.onStateExited = function () {};
 
@@ -73,14 +75,9 @@ const getPlayerPositionState = (function(){
         this.received = false;
     }
 
-    function onReceived(state){
+    function onReceived(state, method){
         function eventListener(username, message){
-            var args = message.split(' ') 
-            if(username == 'requested_position'){
-                state.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
-                state.received = true;
-                state.bot.removeListener('chat', eventListener);
-            }
+            method(username, message, eventListener);
         }
 
         state.bot.on('chat', eventListener)
@@ -91,7 +88,14 @@ const getPlayerPositionState = (function(){
 
         this.bot.chat('/request_position ' + this.data.username)
 
-        onReceived(this);
+        onReceived(this, (username, message, eventListener)=>{
+            var args = message.split(' ') 
+            if(username == 'requested_position'){
+                this.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
+                this.received = true;
+                this.bot.removeListener('chat', eventListener);
+            }
+        });
     };
     GetPlayerPositionState.prototype.onStateExited = function () {};
 
@@ -110,9 +114,9 @@ const progressToState = (function(){
         this.reached = false;
     }
 
-    function onReceived(state){
+    function onReceived(state, method){
         function eventListener(){
-            state.reached = true;
+            method();
         }
 
         state.bot.once('goal_reached', eventListener)
@@ -131,9 +135,14 @@ const progressToState = (function(){
             16
         ))
 
-        onReceived(this);
+        onReceived(this, ()=>{
+            this.reached = true;
+        });
     };
-    ProgressToState.prototype.onStateExited = function () {};
+    ProgressToState.prototype.onStateExited = function () {
+        this.bot.pathfinder.setGoal(null)
+        this.bot.pathfinder.stop();
+    };
 
     return ProgressToState;
 }());
@@ -213,7 +222,7 @@ function createApproachPlayerState(bot, targets, data)
         new StateTransition({
             parent: progressTo,
             child: getPlayerPosition,
-            shouldTransition: () => getPlayerPosition.data.utils.playerIsNear(getPlayerPosition.data.username),
+            shouldTransition: () => progressTo.data.utils.playerIsNear(progressTo.data.username) || progressTo.reached,
             onTransition: () => {},
         }),
     ];
@@ -277,8 +286,8 @@ function createTravelToPlayerState(bot, targets, data){
         }),
     ];
 
-    const TravelToPlayerState = new NestedStateMachine(transitions, enter);
-    TravelToPlayerState.stateName = 'TravelToPlayerState';
+    var TravelToPlayerState = new NestedStateMachine(transitions, enter);
+    console.log(TravelToPlayerState.isFinished());
 
     return TravelToPlayerState;
 }
