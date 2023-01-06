@@ -26,14 +26,16 @@ const guardPlayerState = (function(){
 
     function onTick(state, method){
         function eventListener(){
-            method();
+            method(eventListener);
         }
 
         state.bot.on('physicsTick', eventListener);
     }
 
     GuardPlayerState.prototype.onStateEntered = function () {
-        onTick(this, ()=>{
+        onTick(this, (eventListener)=>{
+            if(this.eventListener != eventListener)this.eventListener = eventListener;
+
             const filter = e => e.type === 'mob' && e.position.distanceTo(this.bot.entity.position) < 16 && e.mobType !== 'Armor Stand';
 
             const entity = this.bot.nearestEntity(filter)
@@ -44,6 +46,7 @@ const guardPlayerState = (function(){
     };
     GuardPlayerState.prototype.onStateExited = function () {
         this.bot.pvp.stop();
+        this.bot.removeListener('physicsTick', this.eventListener);
     };
 
     return GuardPlayerState;

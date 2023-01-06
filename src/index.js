@@ -5,9 +5,7 @@ const pvp = require('mineflayer-pvp').plugin
 const deathEvent = require('mineflayer-death-event')
 const readline = require('readline')
 const fs = require('fs')
-const { Utils } = require('./utils');
 const inventoryViewer = require('mineflayer-web-inventory')
-var Vec3 = require('vec3').Vec3;
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -17,7 +15,7 @@ const rl = readline.createInterface({
 const { Instance } = require('./instance.js');
 
 
-const config = JSON.parse(fs.readFileSync('./../config.json'))
+const config = JSON.parse(fs.readFileSync('./../config.json'));
 
 function connectBot(config){
     const bot = mineflayer.createBot({
@@ -47,7 +45,7 @@ function connectBot(config){
     })
 
     bot.on('kicked', (reason, loggedIn) => {console.log(reason);connectBot(config)})
-    bot.on('error', (error) => {console.log(error);connectBot(config)})
+    bot.on('error', (error) => {console.log(error);})
 }
 
 connectBot(config)

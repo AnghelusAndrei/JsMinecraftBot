@@ -1,13 +1,5 @@
-const mineflayer = require('mineflayer')
-const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
 const { pathfinder, Movements, goals: { GoalNear } } = require('mineflayer-pathfinder')
-const pvp = require('mineflayer-pvp').plugin
-const deathEvent = require('mineflayer-death-event')
-const readline = require('readline')
-const fs = require('fs')
 const { Utils } = require('./utils');
-const inventoryViewer = require('mineflayer-web-inventory')
-var Vec3 = require('vec3').Vec3;
 
 const {
     StateTransition,
@@ -105,12 +97,23 @@ class Instance{
         this.rootLayer.stateName = 'main';
     }
 
-    run(){
-        this.createRootLayer();
+    priorityLayer(){//this layer does not interact with the bot's state machine
+        bot.on('playerCollect', async (collector, collected) => {
+            await new Promise((resolve) => this.bot.once('windowUpdate', resolve));
+
+            //manage inventory
+        });
+    }
+
+
+    async run(){
+        await this.createRootLayer();
         const stateMachine = new BotStateMachine(this.bot, this.rootLayer);
         const port = 12345;
         const SMServer = new StateMachineWebserver(this.bot, stateMachine, port);
         SMServer.startServer();
+
+        this.priorityLayer();
     }
 
     listen(args){
@@ -119,14 +122,14 @@ class Instance{
         switch(command){
             case 'hunt':
                 this.data.username = args[0];
-                this.data.distance = 40;
+                this.data.distance = 64;
 
                 this.attackState.data = this.data;
                 this.transitions[2].trigger();
                 break;
             case 'follow':
                 this.data.username = args[0];
-                this.data.distance = 40;
+                this.data.distance = 64;
 
                 this.followState.data = this.data; 
                 this.transitions[0].trigger();

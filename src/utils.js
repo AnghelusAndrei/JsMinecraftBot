@@ -1,15 +1,16 @@
-var Vec3 = require('vec3').Vec3;
-const mineflayer = require('mineflayer')
-const { mineflayer: mineflayerViewer } = require('prismarine-viewer')
-const { pathfinder, Movements, goals: { GoalNear, GoalFollow, GoalNearXZ } } = require('mineflayer-pathfinder')
-const pvp = require('mineflayer-pvp').plugin
-const deathEvent = require('mineflayer-death-event')
-const { DEATH_ENTITY_TYPE_MOB, DEATH_ENTITY_TYPE_PLAYER } = require("mineflayer-death-event");
+
 
 class Utils{
 
     constructor(bot){
         this.bot = bot;
+        this.run();
+    }
+
+    run(){
+        this.bot.on('move', (position) => {
+            this.timeWhenMoved_ms = new Date();
+        })
     }
 
     playerIsNear(username)
@@ -18,15 +19,19 @@ class Utils{
     }
 
     botIsStuck(){
-        if(this.bot.pathfinder.isMoving()){
+        let currentTime_ms = new Date();
 
-        }else if(this.bot.pathfinder.isBuilding()){
-
-        }else if(this.bot.pathfinder.isMining()){
-
+        if(currentTime_ms - this.timeWhenMoved_ms < 5000){
+            return true;
         }
-        
-        return true;
+
+        if(currentTime_ms - this.timeWhenMoved_ms > 10000){
+            return false;
+        }
+
+        if(this.bot.pathfinder.isMining()){
+            return true;
+        }
     }
 
 }
