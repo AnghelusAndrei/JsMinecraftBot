@@ -21,15 +21,16 @@ const getPartialPositionState = (function(){
         this.received = false;
     }
 
-    function onReceived(state, method){
-        function eventListener(username, message){
-            method(username, message, eventListener);
+    GetPartialPositionState.prototype.onReceived = function(method){
+        GetPartialPositionState.prototype.eventListener = function(username, message){
+            method(username, message);
         }
 
-        state.bot.on('chat', eventListener)
+        this.bot.on('chat', this.eventListener)
     }
 
-    GetPartialPositionState.prototype.onStateEntered = function () {
+    GetPartialPositionState.prototype.onStateEntered = function(){
+
 
         this.received = false;
 
@@ -47,9 +48,7 @@ const getPartialPositionState = (function(){
 
         this.bot.chat('/request_height ' + this.data.position.x + ' ' + this.data.position.z)
 
-        onReceived(this, (username, message, eventListener)=>{
-            if(this.eventListener != eventListener)this.eventListener = eventListener;
-
+        this.onReceived((username, message)=>{
             var args = message.split(' ') 
             if(username == 'requested_height'){
                 this.data.position.y = parseInt(args[0]);
@@ -75,22 +74,21 @@ const getPlayerPositionState = (function(){
         this.received = false;
     }
 
-    function onReceived(state, method){
-        function eventListener(username, message){
-            method(username, message, eventListener);
+    GetPlayerPositionState.prototype.onReceived = function(method){
+        GetPlayerPositionState.prototype.eventListener = function(username, message){
+            method(username, message);
         }
 
-        state.bot.on('chat', eventListener)
+        this.bot.on('chat', this.eventListener)
     }
 
     GetPlayerPositionState.prototype.onStateEntered = function () {
+
         this.received = false;
 
         this.bot.chat('/request_position ' + this.data.username)
 
-        onReceived(this, (username, message, eventListener)=>{
-            if(this.eventListener != eventListener)this.eventListener = eventListener;
-
+        this.onReceived((username, message, eventListener)=>{
             var args = message.split(' ') 
             if(username == 'requested_position'){
                 this.data.position = new Vec3(parseInt(args[0]), parseInt(args[1]), parseInt(args[2]))
@@ -117,15 +115,17 @@ const progressToState = (function(){
         this.reached = false;
     }
 
-    function onReceived(state, method){
-        function eventListener(){
-            method(eventListener);
+    ProgressToState.prototype.onReceived = function(method){
+        ProgressToState.prototype.eventListener = function(){
+            method();
         }
 
-        state.bot.once('goal_reached', eventListener)
+        this.bot.once('goal_reached', this.eventListener)
     }
 
     ProgressToState.prototype.onStateEntered = function () {
+
+        
         this.reached = false;
 
         this.bot.pathfinder.stop()
@@ -138,9 +138,7 @@ const progressToState = (function(){
             16
         ))
 
-        onReceived(this, (eventListener)=>{
-            if(this.eventListener != eventListener)this.eventListener = eventListener;
-
+        this.onReceived(()=>{
             this.reached = true;
         });
     };
@@ -182,43 +180,54 @@ const stuckState = (function(){
         this.stateName = 'stuckState';
         this.targets = targets;
         this.data = data;
+        this.finished = false;
+
+        this.blocks = [
+            new Vec3(-1,0,0),
+            new Vec3(1,0,0),
+            new Vec3(0,0,-1),
+            new Vec3(0,0,1),
+            new Vec3(-1,1,0),
+            new Vec3(1,1,0),
+            new Vec3(0,1,-1),
+            new Vec3(0,1,1),
+        ];
     }
 
-    function onReceived(state, method){
-        function eventListener(){
-            method(eventListener);
+    StuckState.prototype.onReceived = function(method){
+        StuckState.prototype.eventListener = function(){
+            method();
         }
 
-        state.bot.on('goal_reached', eventListener)
+        this.bot.on('goal_reached', this.eventListener)
     }
 
-    function nextBlock(i){
 
+    StuckState.prototype.dig = function (){
+        let blocktarget = this.bot.blockAt(this.bot.entity.position.offset(this.blocks[this.blocksChecked]));
+        while(!this.bot.canDigBlock(blocktarget)){
+            this.blocksChecked++;
+            if(this.blocksChecked >= 8){this.finished = true;return;}
+            blocktarget = this.bot.blockAt(this.bot.entity.position.offset(this.blocks[this.blocksChecked]));
+        }
+        this.blocksChecked++;
+        if(this.blocksChecked >= 8){this.finished = true;return;}
+        this.bot.dig(blocktarget);
     }
 
     StuckState.prototype.onStateEntered = function () {
-        this.blocksDug = 0;
+
+        this.blocksChecked = 0;
+        this.bot.pathfinder.stop();
         
+        this.dig();
 
-        this.bot.pathfinder.stop()
-
-        let blocktarget = this.bot.blockAt(this.bot.entity.position.offset(1, 0, 0));
-        if (this.bot.canDigBlock(blocktarget))bot.dig(blocktarget);
-        
-
-        onReceived(this, (eventListener)=>{
-            if(this.eventListener != eventListener)this.eventListener = eventListener;
-
-            blocktarget = nextBlock(this.blocksChecked);
-            while(!this.bot.canDigBlock(blocktarget))
-                blocktarget = nextBlock(this.blocksChecked);
-                this.blocksChecked++;
-            };
-            this.blocksDug++;  
-            digBlock(blocktarget);
+        this.onReceived(()=>{
+            this.dig();
         });
     }
     StuckState.prototype.onStateExited = function () {
+        this.bot.removeListener('goal_reached', this.eventListener);
     }
 }());
 
