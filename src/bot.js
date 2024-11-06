@@ -31,7 +31,7 @@ var inPathfinding = false;
 var progress = 0;
 
 var pack = {
-    host: 'megaGayming.aternos.me',
+    host: 'abcd.aternos.me',
     port: 25565,
     version: '1.16.4'
 }
